@@ -1,0 +1,33 @@
+[build-system]
+build-backend = "flit_core.buildapi"
+requires = ["flit_core >=4"]
+
+[project]
+name = "Precious Metal Tracker"
+version = "0.1.0"
+authors = [
+    {name = "Jon Schiefelbein", email = "lowclodunine@hotmail.com"},
+]
+description = "A simple application for tracking precious metal stacks."
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+    # Per https://www.pythonguis.com/pyqt6/, the license is not overly important
+    # and PySide6 and PyQt6 are very similar so I picked the older one that has
+    # the possibility of support.
+    "PyQt6 >= 6.5",
+    # This is needed for getting the current gold, silver and other spot prices
+    "requests >= 2.30",
+    # Sphinx will be used for generating the documentation, even if it's
+    # only used in a window in the application.
+    "sphinx >= 6.2",
+    "sphinx-rtd-theme >= 1.2.0",
+]
