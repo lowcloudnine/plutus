@@ -10,14 +10,14 @@ authors = [
 ]
 description = "A simple application for tracking precious metal stacks."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
     # Per https://www.pythonguis.com/pyqt6/, the license is not overly important
