@@ -1,7 +1,7 @@
-<<<<<<< HEAD
 # metal_tracker
-:coin:  A place for tracking, recording and calculating a stack.
-=======
+
+# :coin: A place for tracking, recording and calculating a stack.
+
 # Plutus
 
 Plutus is a simple PyQt6 desktop CRUD application for tracking gold and silver
@@ -43,4 +43,3 @@ Generate the HTML docs with Sphinx:
 ```bash
 uv run sphinx-build -b html docs docs/_build/html
 ```
->>>>>>> 8a7151d (initial commit of partially working app from ai)
