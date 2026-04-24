@@ -6,7 +6,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
-from PyQt6.QtCore import QDate, QSize, Qt
+from PyQt6.QtCore import QDate, QSettings, QSize, Qt
 from PyQt6.QtWidgets import (
     QApplication,
     QBoxLayout,
@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QGridLayout,
@@ -38,10 +39,248 @@ from PyQt6.QtWidgets import (
 from ..database import Database, Holding, VALID_METALS
 from .styles import THEMES, stylesheet
 
+DATABASE_PATH_KEY = "storage/database_path"
+
 
 def default_database_path() -> Path:
     home = Path.home()
     return home / ".local" / "share" / "plutus" / "plutus.sqlite3"
+
+
+def database_settings() -> QSettings:
+    return QSettings("Plutus", "Plutus")
+
+
+def load_database_path() -> Path | None:
+    raw_value = database_settings().value(DATABASE_PATH_KEY)
+    if not raw_value:
+        return None
+    return Path(str(raw_value)).expanduser()
+
+
+def save_database_path(database_path: Path) -> None:
+    database_settings().setValue(DATABASE_PATH_KEY, str(database_path))
+
+
+def clear_database_path() -> None:
+    database_settings().remove(DATABASE_PATH_KEY)
+
+
+def _bundle_roots() -> set[Path]:
+    if not getattr(sys, "frozen", False):
+        return set()
+
+    roots: set[Path] = set()
+    executable_dir = Path(sys.executable).resolve().parent
+    roots.add(executable_dir)
+
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        roots.add(Path(meipass).resolve())
+
+    return roots
+
+
+def _is_within(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def validate_database_path(database_path: Path) -> str | None:
+    resolved_path = database_path.expanduser().resolve(strict=False)
+    for root in _bundle_roots():
+        if _is_within(resolved_path, root):
+            return (
+                "Plutus cannot store its SQLite database inside the application bundle "
+                "or next to the packaged executable. Choose a folder in your home "
+                "directory, Documents, or another writable data location."
+            )
+    return None
+
+
+class DatabaseLocationDialog(QDialog):
+    def __init__(self, parent: QWidget | None = None, suggested_path: Path | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Choose Database Location")
+        self.setModal(True)
+        self.resize(620, 360)
+
+        selected_path = suggested_path or default_database_path()
+
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(24, 24, 24, 24)
+        root_layout.setSpacing(18)
+
+        hero = QFrame()
+        hero.setObjectName("contentCard")
+        hero_layout = QVBoxLayout(hero)
+        hero_layout.setContentsMargins(22, 22, 22, 22)
+        hero_layout.setSpacing(10)
+
+        eyebrow = QLabel("First Launch")
+        eyebrow.setObjectName("eyebrowLabel")
+
+        title = QLabel("Choose where Plutus stores your portfolio database")
+        title.setObjectName("sectionTitle")
+        title.setWordWrap(True)
+
+        message = QLabel(
+            "Plutus saves your holdings in a local SQLite file. Pick a location you control. "
+            "The app will remember this path and reuse it on future launches."
+        )
+        message.setWordWrap(True)
+
+        guidance = QLabel(
+            "A folder under your home directory or Documents is a good choice. "
+            "Packaged app folders are blocked."
+        )
+        guidance.setObjectName("eyebrowLabel")
+        guidance.setWordWrap(True)
+
+        hero_layout.addWidget(eyebrow)
+        hero_layout.addWidget(title)
+        hero_layout.addWidget(message)
+        hero_layout.addWidget(guidance)
+
+        chooser_card = QFrame()
+        chooser_card.setObjectName("summaryCard")
+        chooser_layout = QVBoxLayout(chooser_card)
+        chooser_layout.setContentsMargins(18, 18, 18, 18)
+        chooser_layout.setSpacing(12)
+
+        field_label = QLabel("Database File")
+        field_label.setObjectName("eyebrowLabel")
+
+        path_row = QHBoxLayout()
+        path_row.setContentsMargins(0, 0, 0, 0)
+        path_row.setSpacing(10)
+
+        self.path_input = QLineEdit(str(selected_path))
+        self.path_input.setPlaceholderText(str(default_database_path()))
+
+        browse_button = QPushButton("Browse")
+        browse_button.setObjectName("primaryButton")
+        browse_button.clicked.connect(self._browse_for_path)
+
+        path_row.addWidget(self.path_input, 1)
+        path_row.addWidget(browse_button)
+
+        help_text = QLabel("Plutus will create the file if it does not already exist.")
+        help_text.setObjectName("detailCaption")
+        help_text.setWordWrap(True)
+
+        chooser_layout.addWidget(field_label)
+        chooser_layout.addLayout(path_row)
+        chooser_layout.addWidget(help_text)
+
+        buttons = QDialogButtonBox()
+        self.choose_button = buttons.addButton(
+            "Use This Location", QDialogButtonBox.ButtonRole.AcceptRole
+        )
+        self.cancel_button = buttons.addButton("Quit", QDialogButtonBox.ButtonRole.RejectRole)
+        self.choose_button.setObjectName("primaryButton")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        root_layout.addWidget(hero)
+        root_layout.addWidget(chooser_card)
+        root_layout.addStretch()
+        root_layout.addWidget(buttons)
+
+    def _browse_for_path(self) -> None:
+        selected_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Choose SQLite Database Location",
+            self.path_input.text().strip() or str(default_database_path()),
+            "SQLite Database (*.sqlite3 *.sqlite *.db);;All Files (*)",
+        )
+        if selected_path:
+            self.path_input.setText(selected_path)
+
+    def selected_database_path(self) -> Path:
+        database_path = Path(self.path_input.text().strip()).expanduser()
+        if database_path.suffix.lower() not in {".sqlite3", ".sqlite", ".db"}:
+            database_path = database_path.with_suffix(".sqlite3")
+        return database_path
+
+
+def prompt_for_database_path(parent: QWidget | None = None) -> Path | None:
+    suggested_path = default_database_path()
+    while True:
+        dialog = DatabaseLocationDialog(parent, suggested_path)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            answer = QMessageBox.question(
+                parent,
+                "Database Location Required",
+                (
+                    "Plutus needs a database location before it can start.\n\n"
+                    "Do you want to quit instead of choosing a SQLite file?"
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer == QMessageBox.StandardButton.Yes:
+                return None
+            continue
+
+        database_path = dialog.selected_database_path()
+        suggested_path = database_path
+
+        validation_error = validate_database_path(database_path)
+        if validation_error is not None:
+            QMessageBox.critical(parent, "Invalid Database Location", validation_error)
+            continue
+
+        try:
+            database_path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            QMessageBox.critical(
+                parent,
+                "Invalid Database Location",
+                f"Plutus could not use that location:\n{exc}",
+            )
+            continue
+
+        return database_path
+
+
+def resolve_database_path(
+    database_path: Path | None = None, parent: QWidget | None = None
+) -> Path | None:
+    if database_path is not None:
+        resolved_path = database_path.expanduser()
+        validation_error = validate_database_path(resolved_path)
+        if validation_error is not None:
+            raise ValueError(validation_error)
+        return resolved_path
+
+    saved_path = load_database_path()
+    if saved_path is not None:
+        validation_error = validate_database_path(saved_path)
+        if validation_error is None:
+            if saved_path.exists():
+                return saved_path
+            clear_database_path()
+            QMessageBox.warning(
+                parent,
+                "Saved Database Not Found",
+                (
+                    "The previously selected SQLite database could not be found:\n"
+                    f"{saved_path}\n\n"
+                    "Choose a database location to continue."
+                ),
+            )
+        else:
+            clear_database_path()
+            QMessageBox.warning(parent, "Saved Database Location Reset", validation_error)
+
+    chosen_path = prompt_for_database_path(parent)
+    if chosen_path is not None:
+        save_database_path(chosen_path)
+    return chosen_path
 
 
 class HoldingDialog(QDialog):
@@ -731,7 +970,11 @@ class MainWindow(QMainWindow):
 def build_application(database_path: Path | None = None) -> tuple[QApplication, MainWindow]:
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
-    db = Database(database_path or default_database_path())
+    app.setStyleSheet(stylesheet(THEMES["light"]))
+    resolved_database_path = resolve_database_path(database_path)
+    if resolved_database_path is None:
+        raise SystemExit(0)
+    db = Database(resolved_database_path)
     window = MainWindow(db)
     app.aboutToQuit.connect(db.close)
     return app, window

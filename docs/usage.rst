@@ -8,8 +8,11 @@ Install the project and launch the desktop application:
 
 .. code-block:: bash
 
-   python -m pip install -e .
-   plutus
+   uv sync
+   uv run plutus
+
+On first launch, Plutus prompts for the SQLite database file location and
+reuses that saved path on later launches.
 
 Building a distributable
 ------------------------

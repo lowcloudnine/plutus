@@ -24,7 +24,8 @@ uv sync
 uv run plutus
 ```
 
-The SQLite database is stored at `~/.local/share/plutus/plutus.sqlite3`.
+On first launch, Plutus asks where you want the SQLite file stored and
+remembers that location for future launches.
 
 ## Building a distributable
 
