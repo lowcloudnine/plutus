@@ -13,7 +13,7 @@ holdings in a local SQLite database.
 - Store data locally in SQLite.
 - Show running totals for ounces and total cost by metal.
 - Bundle the desktop app with PyInstaller.
-- Generate documentation with Sphinx using the Furo theme.
+- Generate documentation with MkDocs Material.
 
 ## Running the application
 
@@ -39,10 +39,24 @@ The bundled application is written under `dist/`. Expected outputs are
 `dist/plutus` on Linux, `dist/plutus.exe` on Windows, and `dist/Plutus.app` on
 macOS.
 
+## Downloads
+
+Prebuilt Linux, Windows, and macOS distributions are published on the latest
+GitHub Release:
+
+https://github.com/lowcloudnine/plutus/releases/latest
+
+Direct downloads:
+
+- Linux: https://github.com/lowcloudnine/plutus/releases/latest/download/plutus-linux.zip
+- Windows: https://github.com/lowcloudnine/plutus/releases/latest/download/plutus-windows.zip
+- macOS: https://github.com/lowcloudnine/plutus/releases/latest/download/plutus-macos.zip
+
 ## Building the documentation
 
-Generate the HTML docs with Sphinx:
+Generate the HTML docs with MkDocs:
 
 ```bash
-uv run sphinx-build -b html docs docs/_build/html
+uv sync --extra docs
+uv run mkdocs build --strict
 ```
