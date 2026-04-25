@@ -1,7 +1,7 @@
 [project]
 name = "Plutus"
 version = "0.1.0"
-authors = [{ name = "Jon Schiefelbein", email = "lowclodunine@hotmail.com" }]
+authors = [{ name = "Plutus Contributors" }]
 description = "A simple application for tracking precious metal stacks."
 readme = "README.md"
 requires-python = ">=3.14"

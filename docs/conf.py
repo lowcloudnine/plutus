@@ -1,6 +1,6 @@
 project = "Plutus"
-author = "Jon Schiefelbein"
-copyright = "2026, Jon Schiefelbein"
+author = "Plutus Contributors"
+copyright = "2026, Plutus Contributors"
 
 extensions = [
     "sphinx.ext.autodoc",
