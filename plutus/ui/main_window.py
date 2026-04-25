@@ -36,7 +36,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ..database import Database, Holding, VALID_METALS
+from ..database import (
+    Database,
+    DatabaseError,
+    Holding,
+    VALID_METALS,
+    encrypt_plaintext_database,
+    is_plaintext_sqlite_database,
+)
 from .styles import THEMES, stylesheet
 
 DATABASE_PATH_KEY = "storage/database_path"
@@ -102,11 +109,20 @@ def validate_database_path(database_path: Path) -> str | None:
 
 
 class DatabaseLocationDialog(QDialog):
-    def __init__(self, parent: QWidget | None = None, suggested_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        suggested_path: Path | None = None,
+        *,
+        eyebrow_text: str = "First Launch",
+        accept_text: str = "Use This Location",
+        cancel_text: str = "Quit",
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Choose Database Location")
         self.setModal(True)
-        self.resize(620, 360)
+        self.setMinimumSize(620, 440)
+        self.resize(620, 440)
 
         selected_path = suggested_path or default_database_path()
 
@@ -120,18 +136,20 @@ class DatabaseLocationDialog(QDialog):
         hero_layout.setContentsMargins(22, 22, 22, 22)
         hero_layout.setSpacing(10)
 
-        eyebrow = QLabel("First Launch")
+        eyebrow = QLabel(eyebrow_text)
         eyebrow.setObjectName("eyebrowLabel")
 
         title = QLabel("Choose where Plutus stores your portfolio database")
         title.setObjectName("sectionTitle")
         title.setWordWrap(True)
+        title.setMinimumHeight(34)
 
         message = QLabel(
             "Plutus saves your holdings in a local SQLite file. Pick a location you control. "
             "The app will remember this path and reuse it on future launches."
         )
         message.setWordWrap(True)
+        message.setMinimumHeight(44)
 
         guidance = QLabel(
             "A folder under your home directory or Documents is a good choice. "
@@ -139,6 +157,7 @@ class DatabaseLocationDialog(QDialog):
         )
         guidance.setObjectName("eyebrowLabel")
         guidance.setWordWrap(True)
+        guidance.setMinimumHeight(36)
 
         hero_layout.addWidget(eyebrow)
         hero_layout.addWidget(title)
@@ -171,16 +190,15 @@ class DatabaseLocationDialog(QDialog):
         help_text = QLabel("Plutus will create the file if it does not already exist.")
         help_text.setObjectName("detailCaption")
         help_text.setWordWrap(True)
+        help_text.setMinimumHeight(22)
 
         chooser_layout.addWidget(field_label)
         chooser_layout.addLayout(path_row)
         chooser_layout.addWidget(help_text)
 
         buttons = QDialogButtonBox()
-        self.choose_button = buttons.addButton(
-            "Use This Location", QDialogButtonBox.ButtonRole.AcceptRole
-        )
-        self.cancel_button = buttons.addButton("Quit", QDialogButtonBox.ButtonRole.RejectRole)
+        self.choose_button = buttons.addButton(accept_text, QDialogButtonBox.ButtonRole.AcceptRole)
+        self.cancel_button = buttons.addButton(cancel_text, QDialogButtonBox.ButtonRole.RejectRole)
         self.choose_button.setObjectName("primaryButton")
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -205,6 +223,95 @@ class DatabaseLocationDialog(QDialog):
         if database_path.suffix.lower() not in {".sqlite3", ".sqlite", ".db"}:
             database_path = database_path.with_suffix(".sqlite3")
         return database_path
+
+
+class DatabasePasswordDialog(QDialog):
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        database_path: Path,
+        confirm_password: bool,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Database Password")
+        self.setModal(True)
+        self.setMinimumSize(520, 300)
+        self.resize(520, 300)
+        self.confirm_password = confirm_password
+
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(24, 24, 24, 24)
+        root_layout.setSpacing(16)
+
+        card = QFrame()
+        card.setObjectName("contentCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(22, 22, 22, 22)
+        card_layout.setSpacing(10)
+
+        eyebrow = QLabel("Encrypted Database")
+        eyebrow.setObjectName("eyebrowLabel")
+
+        title_text = "Create a database password" if confirm_password else "Unlock database"
+        title = QLabel(title_text)
+        title.setObjectName("sectionTitle")
+        title.setWordWrap(True)
+
+        detail_text = (
+            "Choose the password Plutus will use to encrypt this SQLite database."
+            if confirm_password
+            else "Enter the password for this encrypted SQLite database."
+        )
+        detail = QLabel(f"{detail_text}\n{database_path}")
+        detail.setWordWrap(True)
+        detail.setMinimumHeight(52)
+
+        card_layout.addWidget(eyebrow)
+        card_layout.addWidget(title)
+        card_layout.addWidget(detail)
+
+        form_card = QFrame()
+        form_card.setObjectName("summaryCard")
+        form_layout = QFormLayout(form_card)
+        form_layout.setContentsMargins(18, 18, 18, 18)
+        form_layout.setSpacing(12)
+
+        self.password_input = QLineEdit()
+        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password_input.setPlaceholderText("Database password")
+        form_layout.addRow("Password", self.password_input)
+
+        self.confirm_input: QLineEdit | None = None
+        if confirm_password:
+            self.confirm_input = QLineEdit()
+            self.confirm_input.setEchoMode(QLineEdit.EchoMode.Password)
+            self.confirm_input.setPlaceholderText("Repeat password")
+            form_layout.addRow("Confirm", self.confirm_input)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self._accept_if_valid)
+        buttons.rejected.connect(self.reject)
+
+        root_layout.addWidget(card)
+        root_layout.addWidget(form_card)
+        root_layout.addStretch()
+        root_layout.addWidget(buttons)
+
+    def _accept_if_valid(self) -> None:
+        password = self.password()
+        if not password:
+            QMessageBox.warning(self, "Password Required", "Enter a database password.")
+            return
+        if self.confirm_input is not None and password != self.confirm_input.text():
+            QMessageBox.warning(self, "Password Mismatch", "The database passwords do not match.")
+            return
+        self.accept()
+
+    def password(self) -> str:
+        return self.password_input.text()
 
 
 def prompt_for_database_path(parent: QWidget | None = None) -> Path | None:
@@ -281,6 +388,47 @@ def resolve_database_path(
     if chosen_path is not None:
         save_database_path(chosen_path)
     return chosen_path
+
+
+def open_database_with_password(database_path: Path, parent: QWidget | None = None) -> Database | None:
+    while True:
+        is_existing_database = database_path.exists() and database_path.stat().st_size > 0
+        needs_setup_password = (
+            not is_existing_database or is_plaintext_sqlite_database(database_path)
+        )
+        dialog = DatabasePasswordDialog(
+            parent,
+            database_path=database_path,
+            confirm_password=needs_setup_password,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+
+        password = dialog.password()
+        if is_plaintext_sqlite_database(database_path):
+            answer = QMessageBox.question(
+                parent,
+                "Encrypt Existing Database",
+                (
+                    "This database is currently an unencrypted SQLite file.\n\n"
+                    "Encrypt it now using the password you entered?"
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                continue
+
+            try:
+                encrypt_plaintext_database(database_path, password)
+            except DatabaseError as exc:
+                QMessageBox.critical(parent, "Database Encryption Failed", str(exc))
+                continue
+
+        try:
+            return Database(database_path, password)
+        except DatabaseError as exc:
+            QMessageBox.critical(parent, "Database Error", str(exc))
 
 
 class HoldingDialog(QDialog):
@@ -412,17 +560,17 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(14)
 
-        brand = QLabel("plutus")
-        brand.setObjectName("sectionTitle")
+        # brand = QLabel("plutus")
+        # brand.setObjectName("sectionTitle")
 
-        subtitle = QLabel("metal portfolio")
-        subtitle.setObjectName("eyebrowLabel")
+        # subtitle = QLabel("metal portfolio")
+        # subtitle.setObjectName("eyebrowLabel")
 
         search_button = QPushButton("Search Holdings")
         search_button.setObjectName("primaryButton")
 
-        layout.addWidget(brand)
-        layout.addWidget(subtitle)
+        # layout.addWidget(brand)
+        # layout.addWidget(subtitle)
         layout.addSpacing(8)
         layout.addWidget(search_button)
         layout.addSpacing(12)
@@ -450,14 +598,14 @@ class MainWindow(QMainWindow):
         title = QLabel("Plutus")
         title.setObjectName("sectionTitle")
 
-        subtitle = QLabel("Portfolio Console")
-        subtitle.setObjectName("eyebrowLabel")
+        # subtitle = QLabel("Portfolio Console")
+        # subtitle.setObjectName("eyebrowLabel")
 
         label_stack = QVBoxLayout()
         label_stack.setContentsMargins(0, 0, 0, 0)
         label_stack.setSpacing(2)
         label_stack.addWidget(title)
-        label_stack.addWidget(subtitle)
+        # label_stack.addWidget(subtitle)
 
         self.theme_toggle_button = QPushButton()
         self.theme_toggle_button.setObjectName("themeToggleButton")
@@ -465,8 +613,16 @@ class MainWindow(QMainWindow):
         self.theme_toggle_button.clicked.connect(self.toggle_theme)
         self.theme_toggle_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
+        settings_button = QPushButton("⚙")
+        settings_button.setObjectName("topIconButton")
+        settings_button.setFlat(True)
+        settings_button.setToolTip("Change database location")
+        settings_button.clicked.connect(self.change_database_location)
+        settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
+
         layout.addLayout(label_stack)
         layout.addStretch()
+        layout.addWidget(settings_button)
         layout.addWidget(self.theme_toggle_button)
         return top_bar
 
@@ -963,6 +1119,73 @@ class MainWindow(QMainWindow):
             self.database.delete_holding(holding.id or 0)
             self.refresh_table()
 
+    def change_database_location(self) -> None:
+        suggested_path = self.database.db_path
+        while True:
+            dialog = DatabaseLocationDialog(
+                self,
+                suggested_path,
+                eyebrow_text="Settings",
+                accept_text="Switch Database",
+                cancel_text="Cancel",
+            )
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+
+            database_path = dialog.selected_database_path()
+            suggested_path = database_path
+
+            validation_error = validate_database_path(database_path)
+            if validation_error is not None:
+                QMessageBox.critical(self, "Invalid Database Location", validation_error)
+                continue
+
+            try:
+                database_path.parent.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                QMessageBox.critical(
+                    self,
+                    "Invalid Database Location",
+                    f"Plutus could not use that location:\n{exc}",
+                )
+                continue
+
+            current_path = self.database.db_path.expanduser().resolve(strict=False)
+            selected_path = database_path.expanduser().resolve(strict=False)
+            if selected_path == current_path:
+                self._show_message("Plutus is already using that database location.")
+                return
+
+            answer = QMessageBox.question(
+                self,
+                "Switch Database",
+                (
+                    "Switch Plutus to this SQLite database?\n\n"
+                    f"{selected_path}\n\n"
+                    "Existing holdings stay in the current database file unless you choose "
+                    "that file again later."
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                continue
+
+            new_database = open_database_with_password(database_path, self)
+            if new_database is None:
+                return
+
+            old_database = self.database
+            self.database = new_database
+            save_database_path(database_path)
+            old_database.close()
+            self.refresh_table()
+            self._show_message(f"Database location updated:\n{selected_path}")
+            return
+
+    def close_database(self) -> None:
+        self.database.close()
+
     def _show_message(self, text: str) -> None:
         QMessageBox.information(self, "Plutus", text)
 
@@ -974,9 +1197,11 @@ def build_application(database_path: Path | None = None) -> tuple[QApplication, 
     resolved_database_path = resolve_database_path(database_path)
     if resolved_database_path is None:
         raise SystemExit(0)
-    db = Database(resolved_database_path)
+    db = open_database_with_password(resolved_database_path)
+    if db is None:
+        raise SystemExit(0)
     window = MainWindow(db)
-    app.aboutToQuit.connect(db.close)
+    app.aboutToQuit.connect(window.close_database)
     return app, window
 
 

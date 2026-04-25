@@ -3,35 +3,35 @@
 from __future__ import annotations
 
 LIGHT_THEME = {
-    "window": "#eef2f7",
+    "window": "#f1f3f4",
     "panel": "#ffffff",
-    "panel_alt": "#f7f9fc",
-    "sidebar": "#f5f7fb",
-    "text": "#183153",
-    "muted": "#6d7c93",
-    "border": "#d7dfeb",
-    "primary": "#183e8d",
-    "primary_soft": "#e9effb",
-    "accent": "#3ea3dc",
+    "panel_alt": "#f7f7f4",
+    "sidebar": "#f7f7f4",
+    "text": "#1f2933",
+    "muted": "#6f7479",
+    "border": "#c8ccd0",
+    "primary": "#b58a2a",
+    "primary_soft": "#f4e7bf",
+    "accent": "#d6ad3f",
     "success": "#28a745",
-    "danger": "#db5c66",
-    "selection": "#d9e6ff",
+    "danger": "#b75d5d",
+    "selection": "#f4e7bf",
 }
 
 DARK_THEME = {
-    "window": "#111827",
-    "panel": "#182233",
-    "panel_alt": "#111b2b",
-    "sidebar": "#0f1726",
-    "text": "#edf2ff",
-    "muted": "#99a8c2",
-    "border": "#26344a",
-    "primary": "#6d95ff",
-    "primary_soft": "#1b2d52",
-    "accent": "#48b7f0",
+    "window": "#141414",
+    "panel": "#1d1d1b",
+    "panel_alt": "#25231f",
+    "sidebar": "#181816",
+    "text": "#f2f0e8",
+    "muted": "#aaa69a",
+    "border": "#4b4a45",
+    "primary": "#d6b24c",
+    "primary_soft": "#3a3120",
+    "accent": "#c4c7c9",
     "success": "#57c785",
-    "danger": "#f07a82",
-    "selection": "#1f3156",
+    "danger": "#d97878",
+    "selection": "#3a3120",
 }
 
 THEMES = {
@@ -47,8 +47,16 @@ def stylesheet(theme: dict[str, str]) -> str:
         color: {text};
         font-size: 14px;
     }}
+    QLabel {{
+        background: transparent;
+        color: {text};
+    }}
     QMainWindow {{
         background: {window};
+    }}
+    QDialog {{
+        background: {window};
+        color: {text};
     }}
     QLabel#titleLabel {{
         font-size: 34px;
@@ -143,7 +151,8 @@ def stylesheet(theme: dict[str, str]) -> str:
         background: {primary_soft};
         color: {primary};
     }}
-    QPushButton#themeToggleButton {{
+    QPushButton#themeToggleButton,
+    QPushButton#topIconButton {{
         background: transparent;
         border: none;
         border-radius: 12px;
@@ -152,7 +161,8 @@ def stylesheet(theme: dict[str, str]) -> str:
         min-height: 44px;
         padding: 0;
     }}
-    QPushButton#themeToggleButton:hover {{
+    QPushButton#themeToggleButton:hover,
+    QPushButton#topIconButton:hover {{
         background: {primary_soft};
         color: {primary};
     }}
@@ -161,10 +171,27 @@ def stylesheet(theme: dict[str, str]) -> str:
     QDateEdit,
     QPlainTextEdit {{
         background: {panel};
+        color: {text};
         border: 1px solid {border};
         border-radius: 14px;
         padding: 10px 12px;
         selection-background-color: {selection};
+    }}
+    QLineEdit:focus,
+    QComboBox:focus,
+    QDateEdit:focus,
+    QPlainTextEdit:focus {{
+        border-color: {primary};
+    }}
+    QLineEdit:disabled,
+    QComboBox:disabled,
+    QDateEdit:disabled,
+    QPlainTextEdit:disabled {{
+        background: {panel_alt};
+        color: {muted};
+    }}
+    QLineEdit::placeholder {{
+        color: {muted};
     }}
     QComboBox::drop-down {{
         border: none;

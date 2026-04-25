@@ -20,6 +20,8 @@ dependencies = [
     "PyQt6 >= 6.5",
     # These are needed for getting the current gold, silver and other spot prices
     "requests >= 2.30",
+    # Provides SQLCipher-backed SQLite encryption without requiring a system SQLCipher install.
+    "sqlcipher3-binary >= 0.6.0",
 ]
 
 [project.optional-dependencies]
