@@ -20,8 +20,8 @@ dependencies = [
     "PyQt6 >= 6.5",
     # These are needed for getting the current gold, silver and other spot prices
     "requests >= 2.30",
-    # Provides SQLCipher-backed SQLite encryption without requiring a system SQLCipher install.
-    "sqlcipher3-binary >= 0.6.0",
+    # Provides SQLCipher-backed SQLite encryption wheels for Linux, Windows, and macOS.
+    "sqlcipher3-wheels >= 0.5.7",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +31,7 @@ build = [
 docs = [
     "sphinx >= 9.0",
     "furo >= 2025.12.19",
+    "ghp-import >= 2.1",
 ]
 
 [project.scripts]

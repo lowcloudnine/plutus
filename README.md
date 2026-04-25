@@ -35,7 +35,9 @@ Use PyInstaller with the included spec file:
 uv run pyinstaller plutus.spec
 ```
 
-The bundled application will be written to `dist/plutus/`.
+The bundled application is written under `dist/`. Expected outputs are
+`dist/plutus` on Linux, `dist/plutus.exe` on Windows, and `dist/Plutus.app` on
+macOS.
 
 ## Building the documentation
 

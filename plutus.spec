@@ -1,5 +1,7 @@
 # PyInstaller build definition for the Plutus desktop application.
 
+import sys
+
 app = Analysis(
     ["plutus/__main__.py"],
     pathex=[],
@@ -28,3 +30,10 @@ exe = EXE(
     upx=True,
     console=False,
 )
+
+if sys.platform == "darwin":
+    app_bundle = BUNDLE(
+        exe,
+        name="Plutus.app",
+        bundle_identifier="com.plutus.plutus",
+    )

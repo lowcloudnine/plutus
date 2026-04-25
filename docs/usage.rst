@@ -21,6 +21,7 @@ Build the desktop binary with PyInstaller:
 
 .. code-block:: bash
 
-   pyinstaller plutus.spec
+   uv run pyinstaller plutus.spec
 
-The generated application will be placed under ``dist/``.
+The generated application will be placed under ``dist/`` as ``plutus`` on Linux,
+``plutus.exe`` on Windows, or ``Plutus.app`` on macOS.

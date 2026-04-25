@@ -17,6 +17,7 @@ jobs:
         os:
           - ubuntu-latest
           - windows-latest
+          - macos-latest
 
     steps:
       - name: Check out repository
@@ -37,8 +38,14 @@ jobs:
       - name: Sync dependencies
         run: uv sync --extra build
 
+      - name: Smoke test encrypted database
+        run: uv run python -c "from pathlib import Path; from tempfile import TemporaryDirectory; from plutus.database import Database, Holding, is_plaintext_sqlite_database; tmp=TemporaryDirectory(); path=Path(tmp.name) / 'plutus.sqlite3'; db=Database(path, 'ci-password'); row_id=db.add_holding(Holding(None, 'Gold', 1.0, 2.0, 'CI', '2026-04-25', '')); db.close(); assert row_id == 1; assert path.exists(); assert not is_plaintext_sqlite_database(path)"
+
       - name: Build application
         run: uv run pyinstaller plutus.spec --clean
+
+      - name: Verify bundled application exists
+        run: uv run python -c "from pathlib import Path; import sys; candidates = [Path('dist/plutus.exe'), Path('dist/plutus'), Path('dist/Plutus.app')]; existing = [path for path in candidates if path.exists()]; assert existing, f'No bundled application found in dist for {sys.platform}'"
 
       - name: Upload bundled application
         uses: actions/upload-artifact@v4
@@ -47,4 +54,5 @@ jobs:
           path: |
             dist/plutus
             dist/plutus.exe
+            dist/Plutus.app
           if-no-files-found: error
