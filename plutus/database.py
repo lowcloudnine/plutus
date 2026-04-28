@@ -62,7 +62,7 @@ class Contact:
         return "Contact"
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, init=False)
 class Holding:
     id: int | None
     metal: str
@@ -72,6 +72,39 @@ class Holding:
     vendor: str
     purchased_on: str
     notes: str
+
+    def __init__(
+        self,
+        id: int | None,
+        metal: str,
+        quantity: float,
+        unit_cost: float,
+        *args: object,
+        contact_id: int | None = None,
+        vendor: str = "",
+        purchased_on: str = "",
+        notes: str = "",
+    ) -> None:
+        if args:
+            if len(args) == 3:
+                contact_id = None
+                vendor, purchased_on, notes = args
+            elif len(args) == 4:
+                contact_id, vendor, purchased_on, notes = args
+            else:
+                raise TypeError(
+                    "Holding expected either 7 legacy positional arguments or "
+                    "8 current positional arguments."
+                )
+
+        self.id = id
+        self.metal = metal
+        self.quantity = quantity
+        self.unit_cost = unit_cost
+        self.contact_id = contact_id
+        self.vendor = str(vendor)
+        self.purchased_on = str(purchased_on)
+        self.notes = str(notes)
 
     @property
     def total_cost(self) -> float:
