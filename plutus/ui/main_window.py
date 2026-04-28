@@ -10,6 +10,7 @@ from PyQt6.QtCore import QCoreApplication, QDate, QSettings, QSize, QStandardPat
 from PyQt6.QtWidgets import (
     QApplication,
     QBoxLayout,
+    QCheckBox,
     QComboBox,
     QDateEdit,
     QDialog,
@@ -37,6 +38,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..database import (
+    Contact,
     Database,
     DatabaseError,
     Holding,
@@ -441,9 +443,90 @@ def open_database_with_password(database_path: Path, parent: QWidget | None = No
             QMessageBox.critical(parent, "Database Error", str(exc))
 
 
-class HoldingDialog(QDialog):
-    def __init__(self, parent: QWidget | None = None, holding: Holding | None = None) -> None:
+class ContactDialog(QDialog):
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setWindowTitle("Contact")
+        self.setModal(True)
+        self.resize(460, 560)
+
+        self.name = QLineEdit()
+        self.name.setPlaceholderText("Company or individual")
+        self.address_line1 = QLineEdit()
+        self.address_line2 = QLineEdit()
+        self.city = QLineEdit()
+        self.state = QLineEdit()
+        self.postal_code = QLineEdit()
+        self.country = QLineEdit()
+        self.phone = QLineEdit()
+        self.url = QLineEdit()
+        self.is_buyer = QCheckBox("Buyer")
+        self.is_seller = QCheckBox("Seller")
+        self.is_seller.setChecked(True)
+
+        form = QFormLayout()
+        form.addRow("Name", self.name)
+        form.addRow("Address", self.address_line1)
+        form.addRow("Address 2", self.address_line2)
+        form.addRow("City", self.city)
+        form.addRow("State", self.state)
+        form.addRow("Postal Code", self.postal_code)
+        form.addRow("Country", self.country)
+        form.addRow("Phone", self.phone)
+        form.addRow("URL", self.url)
+
+        roles = QHBoxLayout()
+        roles.addWidget(self.is_buyer)
+        roles.addWidget(self.is_seller)
+        roles.addStretch()
+        form.addRow("Role", roles)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self._accept_if_valid)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout()
+        layout.addLayout(form)
+        layout.addWidget(buttons)
+        self.setLayout(layout)
+
+    def _accept_if_valid(self) -> None:
+        if not self.name.text().strip():
+            QMessageBox.warning(self, "Name Required", "Enter a company or individual name.")
+            return
+        if not self.is_buyer.isChecked() and not self.is_seller.isChecked():
+            QMessageBox.warning(self, "Role Required", "Choose buyer, seller, or both.")
+            return
+        self.accept()
+
+    def to_contact(self) -> Contact:
+        return Contact(
+            id=None,
+            name=self.name.text().strip(),
+            address_line1=self.address_line1.text().strip(),
+            address_line2=self.address_line2.text().strip(),
+            city=self.city.text().strip(),
+            state=self.state.text().strip(),
+            postal_code=self.postal_code.text().strip(),
+            country=self.country.text().strip(),
+            phone=self.phone.text().strip(),
+            url=self.url.text().strip(),
+            is_buyer=self.is_buyer.isChecked(),
+            is_seller=self.is_seller.isChecked(),
+        )
+
+
+class HoldingDialog(QDialog):
+    def __init__(
+        self,
+        database: Database,
+        parent: QWidget | None = None,
+        holding: Holding | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.database = database
         self.setWindowTitle("Holding")
         self.setModal(True)
         self.resize(420, 420)
@@ -460,7 +543,13 @@ class HoldingDialog(QDialog):
         self.unit_cost.setPrefix("$")
         self.unit_cost.setRange(0.0, 10_000_000)
 
-        self.vendor = QLineEdit()
+        self.vendor = QComboBox()
+        self.add_contact_button = QPushButton("New Contact")
+        self.add_contact_button.clicked.connect(self.add_contact)
+
+        vendor_row = QHBoxLayout()
+        vendor_row.addWidget(self.vendor, 1)
+        vendor_row.addWidget(self.add_contact_button)
 
         self.purchased_on = QDateEdit()
         self.purchased_on.setCalendarPopup(True)
@@ -474,7 +563,7 @@ class HoldingDialog(QDialog):
         form.addRow("Metal", self.metal)
         form.addRow("Quantity (oz)", self.quantity)
         form.addRow("Unit Cost", self.unit_cost)
-        form.addRow("Vendor", self.vendor)
+        form.addRow("Vendor", vendor_row)
         form.addRow("Purchased On", self.purchased_on)
         form.addRow("Notes", self.notes)
 
@@ -490,26 +579,49 @@ class HoldingDialog(QDialog):
         self.setLayout(layout)
 
         self._holding_id: int | None = None
+        self._load_contacts()
         if holding is not None:
             self.load_holding(holding)
+
+    def _load_contacts(self, selected_contact_id: int | None = None) -> None:
+        self.vendor.blockSignals(True)
+        self.vendor.clear()
+        self.vendor.addItem("Direct purchase", None)
+        for contact in self.database.list_contacts(sellers_only=True):
+            self.vendor.addItem(contact.name, contact.id)
+        if selected_contact_id is not None:
+            index = self.vendor.findData(selected_contact_id)
+            if index >= 0:
+                self.vendor.setCurrentIndex(index)
+        self.vendor.blockSignals(False)
+
+    def add_contact(self) -> None:
+        dialog = ContactDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        contact = dialog.to_contact()
+        contact_id = self.database.add_contact(contact)
+        self._load_contacts(contact_id)
 
     def load_holding(self, holding: Holding) -> None:
         self._holding_id = holding.id
         self.metal.setCurrentText(holding.metal)
         self.quantity.setValue(holding.quantity)
         self.unit_cost.setValue(holding.unit_cost)
-        self.vendor.setText(holding.vendor)
+        self._load_contacts(holding.contact_id)
         parsed_date = QDate.fromString(holding.purchased_on, "yyyy-MM-dd")
         self.purchased_on.setDate(parsed_date if parsed_date.isValid() else QDate.currentDate())
         self.notes.setPlainText(holding.notes)
 
     def to_holding(self) -> Holding:
+        contact_id = self.vendor.currentData()
         return Holding(
             id=self._holding_id,
             metal=self.metal.currentText(),
             quantity=float(self.quantity.value()),
             unit_cost=float(self.unit_cost.value()),
-            vendor=self.vendor.text().strip(),
+            contact_id=int(contact_id) if contact_id is not None else None,
+            vendor=self.vendor.currentText() if contact_id is not None else "",
             purchased_on=self.purchased_on.date().toString("yyyy-MM-dd"),
             notes=self.notes.toPlainText().strip(),
         )
@@ -547,11 +659,9 @@ class MainWindow(QMainWindow):
         self.outer_layout.setContentsMargins(0, 0, 0, 0)
         self.outer_layout.setSpacing(18)
 
-        sidebar = self._build_sidebar()
         content = self._build_content()
 
         root_layout.addWidget(top_bar)
-        self.outer_layout.addWidget(sidebar)
         self.outer_layout.addWidget(content, 1)
         root_layout.addLayout(self.outer_layout, 1)
         scroll.setWidget(root)
@@ -560,42 +670,6 @@ class MainWindow(QMainWindow):
         self.apply_theme("light")
         self._apply_responsive_layout()
         self.refresh_table()
-
-    def _build_sidebar(self) -> QFrame:
-        sidebar = QFrame()
-        sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(230)
-
-        layout = QVBoxLayout(sidebar)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(14)
-
-        # brand = QLabel("plutus")
-        # brand.setObjectName("sectionTitle")
-
-        # subtitle = QLabel("metal portfolio")
-        # subtitle.setObjectName("eyebrowLabel")
-
-        search_button = QPushButton("Search Holdings")
-        search_button.setObjectName("primaryButton")
-
-        # layout.addWidget(brand)
-        # layout.addWidget(subtitle)
-        layout.addSpacing(8)
-        layout.addWidget(search_button)
-        layout.addSpacing(12)
-
-        nav_labels = ("Holdings", "Transactions", "Reports", "Clients")
-        for index, label in enumerate(nav_labels):
-            button = QPushButton(label)
-            button.setObjectName("navButton")
-            button.setCheckable(True)
-            button.setChecked(index == 0)
-            layout.addWidget(button)
-
-        layout.addStretch()
-        self.sidebar = sidebar
-        return sidebar
 
     def _build_top_bar(self) -> QFrame:
         top_bar = QFrame()
@@ -912,7 +986,6 @@ class MainWindow(QMainWindow):
             QBoxLayout.Direction.TopToBottom if is_phone else QBoxLayout.Direction.LeftToRight
         )
 
-        self.sidebar.setFixedWidth(220 if not is_phone else max(280, self.width() - 36))
         self.holdings_panel.setMinimumWidth(0)
         self.detail_panel.setMinimumWidth(0)
 
@@ -1099,7 +1172,7 @@ class MainWindow(QMainWindow):
         return next((holding for holding in self.filtered_holdings if holding.id == holding_id), None)
 
     def add_holding(self) -> None:
-        dialog = HoldingDialog(self)
+        dialog = HoldingDialog(self.database, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.database.add_holding(dialog.to_holding())
             self.refresh_table()
@@ -1109,7 +1182,7 @@ class MainWindow(QMainWindow):
         if holding is None:
             self._show_message("Select a holding before editing.")
             return
-        dialog = HoldingDialog(self, holding)
+        dialog = HoldingDialog(self.database, self, holding)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             updated = replace(dialog.to_holding(), id=holding.id)
             self.database.update_holding(updated)

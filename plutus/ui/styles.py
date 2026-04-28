@@ -6,7 +6,6 @@ LIGHT_THEME = {
     "window": "#f1f3f4",
     "panel": "#ffffff",
     "panel_alt": "#f7f7f4",
-    "sidebar": "#f7f7f4",
     "text": "#1f2933",
     "muted": "#6f7479",
     "border": "#c8ccd0",
@@ -22,7 +21,6 @@ DARK_THEME = {
     "window": "#141414",
     "panel": "#1d1d1b",
     "panel_alt": "#25231f",
-    "sidebar": "#181816",
     "text": "#f2f0e8",
     "muted": "#aaa69a",
     "border": "#4b4a45",
@@ -95,7 +93,6 @@ def stylesheet(theme: dict[str, str]) -> str:
         border-radius: 16px;
         padding: 14px;
     }}
-    QFrame#sidebar,
     QFrame#topBar,
     QFrame#contentCard,
     QFrame#filterCard,
@@ -106,9 +103,6 @@ def stylesheet(theme: dict[str, str]) -> str:
         background: {panel};
         border: 1px solid {border};
         border-radius: 22px;
-    }}
-    QFrame#sidebar {{
-        background: {sidebar};
     }}
     QFrame#topBar {{
         background: {panel};
@@ -138,18 +132,6 @@ def stylesheet(theme: dict[str, str]) -> str:
     }}
     QPushButton#dangerButton {{
         color: {danger};
-    }}
-    QPushButton#navButton {{
-        text-align: left;
-        padding: 14px 18px;
-        background: transparent;
-        border: none;
-        border-radius: 16px;
-        color: {muted};
-    }}
-    QPushButton#navButton:checked {{
-        background: {primary_soft};
-        color: {primary};
     }}
     QPushButton#themeToggleButton,
     QPushButton#topIconButton {{
