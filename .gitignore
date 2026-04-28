@@ -1,3 +1,7 @@
+# AI files and settings
+.codex
+AGENTS.md
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

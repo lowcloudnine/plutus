@@ -6,7 +6,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
-from PyQt6.QtCore import QDate, QSettings, QSize, Qt
+from PyQt6.QtCore import QCoreApplication, QDate, QSettings, QSize, QStandardPaths, Qt
 from PyQt6.QtWidgets import (
     QApplication,
     QBoxLayout,
@@ -49,15 +49,25 @@ from ..database import (
 from .styles import THEMES, stylesheet
 
 DATABASE_PATH_KEY = "storage/database_path"
+ORGANIZATION_NAME = "Plutus"
+APPLICATION_NAME = "Plutus"
+DATABASE_FILENAME = "plutus.sqlite3"
+
+
+def configure_application_metadata() -> None:
+    QCoreApplication.setOrganizationName(ORGANIZATION_NAME)
+    QCoreApplication.setApplicationName(APPLICATION_NAME)
 
 
 def default_database_path() -> Path:
-    home = Path.home()
-    return home / ".local" / "share" / "plutus" / "plutus.sqlite3"
+    data_location = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
+    if data_location:
+        return Path(data_location) / DATABASE_FILENAME
+    return Path.home() / f".{APPLICATION_NAME.lower()}" / DATABASE_FILENAME
 
 
 def database_settings() -> QSettings:
-    return QSettings("Plutus", "Plutus")
+    return QSettings(ORGANIZATION_NAME, APPLICATION_NAME)
 
 
 def load_database_path() -> Path | None:
@@ -1265,6 +1275,7 @@ class MainWindow(QMainWindow):
 
 def build_application(database_path: Path | None = None) -> tuple[QApplication, MainWindow]:
     app = QApplication(sys.argv)
+    configure_application_metadata()
     app.setStyle("Fusion")
     app.setStyleSheet(stylesheet(THEMES["light"]))
     resolved_database_path = resolve_database_path(database_path)

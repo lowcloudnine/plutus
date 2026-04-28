@@ -7,6 +7,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build on ${{ matrix.os }}
@@ -14,9 +17,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
+        include:
+          - os: ubuntu-latest
+            package: linux
+          - os: windows-latest
+            package: windows
+          - os: macos-latest
+            package: macos
 
     steps:
       - name: Check out repository
@@ -37,8 +44,17 @@ jobs:
       - name: Sync dependencies
         run: uv sync --extra build
 
+      - name: Smoke test encrypted database
+        run: uv run python -c "from pathlib import Path; from tempfile import TemporaryDirectory; from plutus.database import Database, Holding, is_plaintext_sqlite_database; tmp=TemporaryDirectory(); path=Path(tmp.name) / 'plutus.sqlite3'; db=Database(path, 'ci-password'); row_id=db.add_holding(Holding(None, 'Gold', 1.0, 2.0, 'CI', '2026-04-25', '')); db.close(); assert row_id == 1; assert path.exists(); assert not is_plaintext_sqlite_database(path)"
+
       - name: Build application
         run: uv run pyinstaller plutus.spec --clean
+
+      - name: Verify bundled application exists
+        run: uv run python -c "from pathlib import Path; import sys; candidates = [Path('dist/plutus.exe'), Path('dist/plutus'), Path('dist/Plutus.app')]; existing = [path for path in candidates if path.exists()]; assert existing, f'No bundled application found in dist for {sys.platform}'"
+
+      - name: Package distribution
+        run: uv run python scripts/package_distribution.py --platform ${{ matrix.package }}
 
       - name: Upload bundled application
         uses: actions/upload-artifact@v4
@@ -47,4 +63,47 @@ jobs:
           path: |
             dist/plutus
             dist/plutus.exe
+            dist/Plutus.app
           if-no-files-found: error
+
+      - name: Upload packaged distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: plutus-${{ matrix.package }}-zip
+          path: dist-artifacts/plutus-${{ matrix.package }}.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish latest main release
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download packaged distributions
+        uses: actions/download-artifact@v4
+        with:
+          pattern: plutus-*-zip
+          path: release-assets
+          merge-multiple: true
+
+      - name: Update latest tag
+        run: |
+          git tag --force latest "$GITHUB_SHA"
+          git push origin latest --force
+
+      - name: Publish latest main release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit latest --repo "$GITHUB_REPOSITORY" --title "Latest Main Build" --notes "Automated build from main commit $GITHUB_SHA."
+            gh release upload latest release-assets/*.zip --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create latest release-assets/*.zip --repo "$GITHUB_REPOSITORY" --title "Latest Main Build" --notes "Automated build from main commit $GITHUB_SHA."
+          fi

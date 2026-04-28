@@ -1,0 +1,21 @@
+site_name: Plutus
+site_description: A simple application for tracking precious metal stacks.
+site_url: https://lowcloudnine.github.io/plutus/
+repo_url: https://github.com/lowcloudnine/plutus
+repo_name: lowcloudnine/plutus
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Usage: usage.md
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
